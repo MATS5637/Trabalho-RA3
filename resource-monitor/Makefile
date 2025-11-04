@@ -1,5 +1,5 @@
 Compilador = gcc
-FLAGS = -std=c2x
+FLAGS = -std=c99
 Otimizacao = -O2
 DEBUG = -g
 Avisos = -Wall -Wextra -Wpedantic
@@ -43,7 +43,8 @@ all: construir
 construir: prep_diretorios $(Programa_fin)
 
 prep_diretorios:
-	@mkdir -p $(Objeto) $(Executavel)
+	@if not exist $(Objeto) mkdir $(Objeto)
+	@if not exist $(Executavel) mkdir $(Executavel)
 	@echo "Diretórios preparados."
 
 $(Programa_fin): $(objetos)
