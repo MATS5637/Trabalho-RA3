@@ -1,4 +1,6 @@
 // cpu_monitor.c
+#define _POSIX_C_SOURCE 200809L  // garante nanosleep/localtime_r em alguns ambientes
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,45 +8,20 @@
 #include <time.h>
 #include <sys/types.h>
 #include <errno.h>
-#include "monitor.h"
-
-/*
-  Assumindo em monitor.h:
-
-  typedef struct {
-      unsigned long long user, nice, system, idle;
-      unsigned long long iowait, irq, softirq, steal;
-      unsigned long long total, active;
-  } cpu_times_t;
-
-  typedef struct {
-      unsigned long long utime, stime;
-      unsigned long long total_time;
-  } proc_cpu_t;
-
-  Assinaturas públicas usadas aqui:
-  int    cpu_ler_times_sistema(cpu_times_t *out);
-  double cpu_calculo_percentual(const cpu_times_t *antes, const cpu_times_t *depois);
-  int    cpu_ler_processo(pid_t pid, proc_cpu_t *out);
-  double cpu_calculo_percentual_processo(const proc_cpu_t *antes, const proc_cpu_t *depois,
-                                         const cpu_times_t *sys_antes, const cpu_times_t *sys_depois);
-  int    cpu_monitorar_pid_csv(pid_t pid, int intervalo_ms, int amostras, FILE *saida);
-  double cpu_obter_uso_instantaneo(pid_t pid);
-  void   cpu_resetar_estado(void);
-  int    processo_existe(pid_t pid);
-*/
+#include "../include/monitor.h"
 
 /* -------------------- Estado para uso instantâneo -------------------- */
+
 typedef struct {
-    pid_t pid;
-    cpu_times_t sys_antes;
-    proc_cpu_t  proc_antes;
-    int iniciado;
+    pid_t        pid;
+    cpu_times_t  sys_antes;
+    proc_cpu_t   proc_antes;
+    int          iniciado;
 } cpu_monitor_state_t;
 
 static cpu_monitor_state_t monitor_state = { .pid = -1, .iniciado = 0 };
 
-/* -------------------- Utilitários -------------------- */
+/* -------------------- Utilitários internos -------------------- */
 
 /* Timestamp legível (thread-safe) */
 static void obter_timestamp(char *buffer, size_t size) {
@@ -58,15 +35,16 @@ static void obter_timestamp(char *buffer, size_t size) {
     strftime(buffer, size, "%Y-%m-%d %H:%M:%S", &tm_info);
 }
 
-/* Sleep com retry em EINTR */
+/* Sleep em milissegundos com retry em EINTR */
 static void dormir_ms(int intervalo_ms) {
     struct timespec req = {
         .tv_sec  = intervalo_ms / 1000,
         .tv_nsec = (long)(intervalo_ms % 1000) * 1000000L
     };
     struct timespec rem = req;
-    while (nanosleep(&rem, &rem) == -1 && errno == EINTR) {
-        /* retry até completar */
+
+    while (nanosleep(&req, &rem) == -1 && errno == EINTR) {
+        req = rem;  // continua de onde parou
     }
 }
 
@@ -92,7 +70,7 @@ int cpu_ler_times_sistema(cpu_times_t *out) {
     }
     fclose(fp);
 
-    /* Ler até 10 campos (guest/guest_nice ignorados no cálculo) */
+    // Tenta ler até 10 campos: user nice system idle iowait irq softirq steal guest guest_nice
     unsigned long long user=0, nice=0, system=0, idle=0;
     unsigned long long iowait=0, irq=0, softirq=0, steal=0, guest=0, guest_nice=0;
 
@@ -117,9 +95,11 @@ int cpu_ler_times_sistema(cpu_times_t *out) {
     t.softirq = (n > 6) ? softirq : 0;
     t.steal   = (n > 7) ? steal   : 0;
 
-    /* total = todas as colunas principais */
-    t.total  = t.user + t.nice + t.system + t.idle + t.iowait + t.irq + t.softirq + t.steal;
-    /* active = total - (idle + iowait)  → iowait conta como “inativo” */
+    // total = todas as colunas principais
+    t.total  = t.user + t.nice + t.system + t.idle +
+               t.iowait + t.irq + t.softirq + t.steal;
+
+    // active = total - (idle + iowait) → iowait conta como “inativo”
     t.active = t.total - (t.idle + t.iowait);
 
     *out = t;
@@ -132,8 +112,10 @@ double cpu_calculo_percentual(const cpu_times_t *antes, const cpu_times_t *depoi
         return 0.0;
     }
 
-    unsigned long long delta_total  = (depois->total  > antes->total)  ? (depois->total  - antes->total)  : 0ULL;
-    unsigned long long delta_active = (depois->active > antes->active) ? (depois->active - antes->active) : 0ULL;
+    unsigned long long delta_total  = (depois->total  > antes->total)
+                                      ? (depois->total  - antes->total)  : 0ULL;
+    unsigned long long delta_active = (depois->active > antes->active)
+                                      ? (depois->active - antes->active) : 0ULL;
 
     if (delta_total == 0ULL) return 0.0;
     return (double)delta_active / (double)delta_total * 100.0;
@@ -168,33 +150,35 @@ int cpu_ler_processo(pid_t pid, proc_cpu_t *out) {
     }
     fclose(fp);
 
-    /* /proc/<pid>/stat: o nome do processo vai até o último ')' */
+    // /proc/<pid>/stat: o nome do processo vai até o último ')'
     char *p = strrchr(linha, ')');
     if (!p) {
         fprintf(stderr, "Formato inesperado em %s (não encontrou ')')\n", caminho);
         return -1;
     }
-    p++; /* avança para depois do ')' */
+    p++;  // depois do ')'
 
-    /* Campos 14–17: utime, stime, cutime, cstime (usar 64-bit) */
+    // Campos 14–17: utime, stime, cutime, cstime
     unsigned long long utime=0, stime=0, cutime=0, cstime=0;
     int lidos = sscanf(p,
         " %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %llu %llu %llu %llu",
         &utime, &stime, &cutime, &cstime);
 
     if (lidos < 2) {
-        fprintf(stderr, "Não foi possível ler tempos do processo %d (lidos=%d)\n", pid, lidos);
+        fprintf(stderr, "Não foi possível ler tempos do processo %d (lidos=%d)\n",
+                pid, lidos);
         return -1;
     }
 
     out->utime      = utime;
     out->stime      = stime;
-    out->total_time = utime + stime + cutime + cstime; /* se não lidos, ficam 0 */
+    out->total_time = utime + stime + cutime + cstime;
     return 0;
 }
 
 double cpu_calculo_percentual_processo(const proc_cpu_t *antes, const proc_cpu_t *depois,
-                                       const cpu_times_t *sys_antes, const cpu_times_t *sys_depois) {
+                                       const cpu_times_t *sys_antes,
+                                       const cpu_times_t *sys_depois) {
     if (!antes || !depois || !sys_antes || !sys_depois) {
         fprintf(stderr, "Erro: ponteiro nulo em cpu_calculo_percentual_processo\n");
         return 0.0;
@@ -207,14 +191,16 @@ double cpu_calculo_percentual_processo(const proc_cpu_t *antes, const proc_cpu_t
 
     if (delta_sys == 0ULL) return 0.0;
 
-    /* % da capacidade total da máquina (máximo ~100%). */
+    // % da capacidade total da máquina (máx ~100%)
     double pct = ((double)delta_proc / (double)delta_sys) * 100.0;
 
-    /* Para estilo “top” (pode ultrapassar 100% em multicore), descomente:
-       long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
-       if (ncpu < 1) ncpu = 1;
-       pct *= (double)ncpu;
+    // Para estilo “top” (pode ultrapassar 100% em multicore), descomente:
+    /*
+    long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
+    if (ncpu < 1) ncpu = 1;
+    pct *= (double)ncpu;
     */
+
     return pct;
 }
 
@@ -248,7 +234,7 @@ int cpu_monitorar_pid_csv(pid_t pid, int intervalo_ms, int amostras, FILE *saida
         return -1;
     }
 
-    /* Cabeçalho do CSV */
+    // Cabeçalho do CSV
     fprintf(saida, "timestamp,amostra,cpu_processo_percent,cpu_sistema_percent\n");
     fflush(saida);
 
@@ -265,7 +251,8 @@ int cpu_monitorar_pid_csv(pid_t pid, int intervalo_ms, int amostras, FILE *saida
             return -1;
         }
         if (cpu_ler_processo(pid, &proc_depois) != 0) {
-            fprintf(stderr, "Processo %d terminou durante o monitoramento (amostra %d)\n", pid, i);
+            fprintf(stderr, "Processo %d terminou durante o monitoramento (amostra %d)\n",
+                    pid, i);
             return -1;
         }
 
@@ -278,11 +265,11 @@ int cpu_monitorar_pid_csv(pid_t pid, int intervalo_ms, int amostras, FILE *saida
         fprintf(saida, "%s,%d,%.2f,%.2f\n", ts, i, cpu_processo, cpu_sistema);
         fflush(saida);
 
-        /* Atualiza bases para próxima iteração */
+        // Atualiza bases
         sys_antes  = sys_depois;
         proc_antes = proc_depois;
 
-        /* Feedback (não poluir CSV) */
+        // Feedback (sem poluir CSV se for stdout)
         if (saida != stdout && (amostras <= 10 || (i + 1) % 10 == 0)) {
             fprintf(stderr, "Amostra %d/%d: processo=%.2f%%, sistema=%.2f%%\n",
                     i + 1, amostras, cpu_processo, cpu_sistema);
@@ -306,7 +293,7 @@ double cpu_obter_uso_instantaneo(pid_t pid) {
     cpu_times_t sys_depois;
     proc_cpu_t  proc_depois;
 
-    /* Se mudou de PID ou primeira vez, inicializa estado e forma delta */
+    // Se mudou de PID ou primeira vez, inicializa estado e forma delta
     if (!monitor_state.iniciado || monitor_state.pid != pid) {
         if (cpu_ler_times_sistema(&monitor_state.sys_antes) != 0) {
             fprintf(stderr, "Falha na leitura inicial do sistema para uso instantâneo\n");
@@ -316,11 +303,10 @@ double cpu_obter_uso_instantaneo(pid_t pid) {
             fprintf(stderr, "Falha na leitura inicial do processo %d para uso instantâneo\n", pid);
             return -1.0;
         }
-        monitor_state.pid = pid;
+        monitor_state.pid      = pid;
         monitor_state.iniciado = 1;
 
-        /* pequena espera para formar delta */
-        dormir_ms(100);
+        dormir_ms(100);  // pequena espera para formar delta
         fprintf(stderr, "Estado do monitor inicializado para PID %d\n", pid);
     }
 
@@ -336,22 +322,22 @@ double cpu_obter_uso_instantaneo(pid_t pid) {
     double uso = cpu_calculo_percentual_processo(&monitor_state.proc_antes, &proc_depois,
                                                  &monitor_state.sys_antes, &sys_depois);
 
-    /* Atualiza estado */
+    // Atualiza estado
     monitor_state.sys_antes  = sys_depois;
     monitor_state.proc_antes = proc_depois;
 
     return uso;
 }
 
+/* -------------------- Estado & utilitários -------------------- */
+
 void cpu_resetar_estado(void) {
-    monitor_state.pid = -1;
+    monitor_state.pid      = -1;
     monitor_state.iniciado = 0;
-    memset(&monitor_state.sys_antes, 0, sizeof(cpu_times_t));
+    memset(&monitor_state.sys_antes,  0, sizeof(cpu_times_t));
     memset(&monitor_state.proc_antes, 0, sizeof(proc_cpu_t));
     fprintf(stderr, "Estado do monitor de CPU resetado\n");
 }
-
-/* -------------------- Utilitário de existência de processo -------------------- */
 
 int processo_existe(pid_t pid) {
     if (pid <= 0) return 0;
