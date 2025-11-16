@@ -1,12 +1,11 @@
 // tests/test_cpu.c
 // Programa de teste para o módulo de monitoramento de CPU (cpu_monitor.c)
-
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <signal.h>      // kill()
 #include <time.h>
 #include <errno.h>
 #include <string.h>

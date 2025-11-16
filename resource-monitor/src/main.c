@@ -50,8 +50,20 @@ static int cmd_cpu(int argc, char *argv[]) {
         return 1;
     }
 
+    fprintf(stderr, "\n===== Monitoramento de CPU =====\n");
+    fprintf(stderr, "PID monitorado      : %d\n", pid);
+    fprintf(stderr, "Intervalo entre leituras (ms): %d\n", intervalo_ms);
+    fprintf(stderr, "Número de amostras  : %d\n\n", amostras);
+
+    fprintf(stderr, "Cada linha gerada possui os campos:\n");
+    fprintf(stderr, "  timestamp            -> data/hora da coleta\n");
+    fprintf(stderr, "  amostra              -> número sequencial da amostra (0..N-1)\n");
+    fprintf(stderr, "  cpu_processo_percent -> uso de CPU do processo monitorado (em %%)\n");
+    fprintf(stderr, "  cpu_sistema_percent  -> uso total de CPU do sistema (em %%)\n\n");
+
     return cpu_monitorar_pid_csv(pid, intervalo_ms, amostras, stdout);
 }
+
 
 static int cmd_mem(int argc, char *argv[]) {
     if (argc != 5) {
