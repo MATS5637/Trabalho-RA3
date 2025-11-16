@@ -3,7 +3,7 @@ CC          = gcc
 STD         = -std=c99
 OPT         = -O2
 DBG         = -g
-WARN        = -Wall -Wextra -Wpedantic
+WARN        = -Wall -Wextra -Wpedantic -Wno-unused-variable
 INCLUDE_DIR = include
 CFLAGS      = $(STD) $(OPT) $(DBG) $(WARN) -I$(INCLUDE_DIR) -MMD -MP
 LDFLAGS     =
@@ -88,8 +88,9 @@ $(BIN_DIR)/test_cpu: $(OBJ_DIR)/test_cpu.o $(OBJ_DIR)/cpu_monitor.o | $(BIN_DIR)
 $(BIN_DIR)/test_io: $(OBJ_DIR)/test_io.o $(OBJ_DIR)/io_monitor.o | $(BIN_DIR)
 	$(CC) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
-$(BIN_DIR)/test_memory: $(OBJ_DIR)/test_memory.o $(OBJ_DIR)/memory_monitor.o | $(BIN_DIR)
+$(BIN_DIR)/test_memory: $(OBJ_DIR)/test_memory.o $(OBJ_DIR)/memory_monitor.o $(OBJ_DIR)/cpu_monitor.o | $(BIN_DIR)
 	$(CC) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+
 
 # Execução
 rodar: construir
