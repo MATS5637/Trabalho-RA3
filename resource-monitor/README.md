@@ -26,29 +26,36 @@ Script de visualização
 
 Modo interativo e modo linha de comando
 
+
+```
 📁 Estrutura do Projeto
 resource-monitor/
-├── bin/                     # Executáveis finais
-├── build/                   # Objetos compilados
-├── data/                    # Arquivos CSV gerados pelos testes e comparações
+├── bin/ # Executáveis finais
+├── build/ # Objetos compilados
+├── data/ # Arquivos CSV gerados pelos testes
 ├── docs/
-│   ├── ARCHITECTURE.md      # Documento explicando a arquitetura
-├── include/                 # Cabeçalhos (.h)
-├── scripts/
-│   ├── compare_tools.sh     # Script de comparação entre ferramentas
-│   ├── visualize.py         # Visualização gráfica dos CSVs
-├── src/                     # Código-fonte principal
-│   ├── main.c
-│   ├── cpu_monitor.c
-│   ├── memory_monitor.c
-│   ├── io_monitor.c
-│   ├── namespace_analyzer.c
-│   ├── cgroup_manager.c
-├── tests/                   # Testes automáticos
-│   ├── test_cpu.c
-│   ├── test_memory.c
-│   ├── test_io.c
-├── Makefile                 # Automação de compilação e testes
+│ ├── ARCHITECTURE.md # Documento explicando a arquitetura
+├── include/ # Cabeçalhos (.h)
+│ ├── cgroup.h
+│ ├── monitor.h
+│ └── namespace.h
+├── scripts/ # Scripts utilitários
+│ ├── compare_tools.sh # Script de comparação entre ferramentas
+│ └── visualize.py # Visualização gráfica dos CSVs
+├── src/ # Código-fonte principal
+│ ├── main.c
+│ ├── cpu_monitor.c
+│ ├── memory_monitor.c
+│ ├── io_monitor.c
+│ ├── cgroup_manager.c
+│ └── namespace_analyzer.c
+├── tests/ # Testes automáticos
+│ ├── test_cpu.c
+│ ├── test_io.c
+│ └── test_memory.c
+└── Makefile # Automação de compilação e testes
+
+```
 
 🔧 1. Preparar o Ambiente
 Requisitos:
