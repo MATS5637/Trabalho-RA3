@@ -357,6 +357,57 @@ int io_criar_workload(const char *arquivo, size_t tamanho_mb, int operacoes) {
     return 0;
 }
 
+int io_gerar_relatorio(pid_t pid, FILE *out) {
+    if (!out) out = stdout;
+
+    if (pid <= 0) {
+        fprintf(stderr, "PID inválido: %d\n", pid);
+        return -1;
+    }
+
+    if (!processo_existe(pid)) {
+        fprintf(stderr, "Processo %d não existe.\n", pid);
+        return -1;
+    }
+
+    io_stats_t taxas;
+    if (io_obter_uso_instantaneo(pid, &taxas) != 0) {
+        fprintf(stderr, "Não foi possível obter uso de I/O para PID %d.\n", pid);
+        return -1;
+    }
+
+    char ts[64];
+    obter_timestamp_io(ts, sizeof(ts));
+
+    fprintf(out,
+            "============================================================\n"
+            "   Resource Monitor - Relatório de I/O\n"
+            "============================================================\n"
+            "  PID monitorado : %d\n"
+            "  Timestamp      : %s\n"
+            "------------------------------------------------------------\n"
+            "  Taxa de leitura : %10.2f KB/s\n"
+            "  Taxa de escrita : %10.2f KB/s\n"
+            "  Syscalls leitura: %10llu ops/s\n"
+            "  Syscalls escrita: %10llu ops/s\n"
+            "  Operações disco : %10llu ops/s (aprox.)\n"
+            "============================================================\n\n",
+            pid, ts,
+            taxas.read_bytes  / 1024.0,
+            taxas.write_bytes / 1024.0,
+            taxas.read_syscalls,
+            taxas.write_syscalls,
+            taxas.disk_operations);
+
+    return 0;
+}
+
+
+
+
+
+
+
 /* ==================== UTILITÁRIOS ==================== */
 
 void io_resetar_estado(void) {

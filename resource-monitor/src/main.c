@@ -310,82 +310,43 @@ static int menu_interativo(const char *progname) {
             return 0;
         }
 
-        if (opcao == 1) {
+                    if (opcao == 1) {
             pid_t pid;
-            int intervalo, amostras;
-            char buf_pid[32], buf_int[32], buf_ams[32];
-            char *argv_cpu[6];
 
-            printf("PID: ");
+            printf("PID a monitorar (CPU): ");
             if (scanf("%d", &pid) != 1) return 1;
-            printf("Intervalo (ms): ");
-            if (scanf("%d", &intervalo) != 1) return 1;
-            printf("Amostras: ");
-            if (scanf("%d", &amostras) != 1) return 1;
 
-            snprintf(buf_pid, sizeof(buf_pid), "%d", pid);
-            snprintf(buf_int, sizeof(buf_int), "%d", intervalo);
-            snprintf(buf_ams, sizeof(buf_ams), "%d", amostras);
-
-            argv_cpu[0] = (char *)progname;
-            argv_cpu[1] = "cpu";
-            argv_cpu[2] = buf_pid;
-            argv_cpu[3] = buf_int;
-            argv_cpu[4] = buf_ams;
-            argv_cpu[5] = NULL;
-
-            cmd_cpu(5, argv_cpu);
-        } else if (opcao == 2) {
+            if (!processo_existe(pid)) {
+                fprintf(stderr, "Processo %d não existe.\n", pid);
+            } else {
+                cpu_gerar_relatorio(pid, stdout);
+            }
+        }
+            else if (opcao == 2) {
             pid_t pid;
-            int intervalo, amostras;
-            char buf_pid[32], buf_int[32], buf_ams[32];
-            char *argv_mem[6];
 
-            printf("PID: ");
+            printf("PID a monitorar (Memória): ");
             if (scanf("%d", &pid) != 1) return 1;
-            printf("Intervalo (ms): ");
-            if (scanf("%d", &intervalo) != 1) return 1;
-            printf("Amostras: ");
-            if (scanf("%d", &amostras) != 1) return 1;
 
-            snprintf(buf_pid, sizeof(buf_pid), "%d", pid);
-            snprintf(buf_int, sizeof(buf_int), "%d", intervalo);
-            snprintf(buf_ams, sizeof(buf_ams), "%d", amostras);
+            if (!processo_existe(pid)) {
+                fprintf(stderr, "Processo %d não existe.\n", pid);
+            } else {
+                mem_gerar_relatorio(pid, stdout);
+            }
 
-            argv_mem[0] = (char *)progname;
-            argv_mem[1] = "mem";
-            argv_mem[2] = buf_pid;
-            argv_mem[3] = buf_int;
-            argv_mem[4] = buf_ams;
-            argv_mem[5] = NULL;
-
-            cmd_mem(5, argv_mem);
         } else if (opcao == 3) {
             pid_t pid;
-            int intervalo, amostras;
-            char buf_pid[32], buf_int[32], buf_ams[32];
-            char *argv_io[6];
 
-            printf("PID: ");
+            printf("PID a monitorar (I/O): ");
             if (scanf("%d", &pid) != 1) return 1;
-            printf("Intervalo (ms): ");
-            if (scanf("%d", &intervalo) != 1) return 1;
-            printf("Amostras: ");
-            if (scanf("%d", &amostras) != 1) return 1;
 
-            snprintf(buf_pid, sizeof(buf_pid), "%d", pid);
-            snprintf(buf_int, sizeof(buf_int), "%d", intervalo);
-            snprintf(buf_ams, sizeof(buf_ams), "%d", amostras);
-
-            argv_io[0] = (char *)progname;
-            argv_io[1] = "io";
-            argv_io[2] = buf_pid;
-            argv_io[3] = buf_int;
-            argv_io[4] = buf_ams;
-            argv_io[5] = NULL;
-
-            cmd_io(5, argv_io);
-        } else if (opcao == 4) {
+            if (!processo_existe(pid)) {
+                fprintf(stderr, "Processo %d não existe.\n", pid);
+            } else {
+                io_gerar_relatorio(pid, stdout);
+            }
+        }
+            else if (opcao == 4) {
             pid_t pid;
             char buf_pid[32];
             char *argv_ns[4];

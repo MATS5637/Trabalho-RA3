@@ -329,6 +329,73 @@ double cpu_obter_uso_instantaneo(pid_t pid) {
     return uso;
 }
 
+int cpu_gerar_relatorio(pid_t pid, FILE *out) {
+    if (!out) out = stdout;
+
+    if (pid <= 0) {
+        fprintf(stderr, "PID inválido: %d\n", pid);
+        return -1;
+    }
+
+    if (!processo_existe(pid)) {
+        fprintf(stderr, "Processo %d não existe.\n", pid);
+        return -1;
+    }
+
+    cpu_times_t sys_antes, sys_depois;
+    proc_cpu_t proc_antes, proc_depois;
+
+    if (cpu_ler_times_sistema(&sys_antes) != 0) {
+        fprintf(stderr, "Falha ao ler tempos de CPU do sistema.\n");
+        return -1;
+    }
+
+    if (cpu_ler_processo(pid, &proc_antes) != 0) {
+        fprintf(stderr, "Falha ao ler tempos de CPU do processo %d.\n", pid);
+        return -1;
+    }
+
+    dormir_ms(500);
+
+    if (cpu_ler_times_sistema(&sys_depois) != 0) {
+        fprintf(stderr, "Falha ao ler tempos de CPU do sistema (segunda leitura).\n");
+        return -1;
+    }
+
+    if (cpu_ler_processo(pid, &proc_depois) != 0) {
+        fprintf(stderr, "Processo %d terminou durante a medição.\n", pid);
+        return -1;
+    }
+
+    double cpu_sistema  = cpu_calculo_percentual(&sys_antes, &sys_depois);
+    double cpu_processo = cpu_calculo_percentual_processo(&proc_antes, &proc_depois,
+                                                          &sys_antes, &sys_depois);
+
+    char ts[64];
+    obter_timestamp(ts, sizeof(ts));
+
+    fprintf(out,
+            "============================================================\n"
+            "   Resource Monitor - Relatório de CPU\n"
+            "============================================================\n"
+            "  PID monitorado : %d\n"
+            "  Timestamp      : %s\n"
+            "------------------------------------------------------------\n"
+            "  Uso de CPU do processo : %6.2f %%\n"
+            "  Uso de CPU do sistema  : %6.2f %%\n"
+            "============================================================\n\n",
+            pid, ts, cpu_processo, cpu_sistema);
+
+    return 0;
+}
+
+
+
+
+
+
+
+
 /* -------------------- Estado & utilitários -------------------- */
 
 void cpu_resetar_estado(void) {
