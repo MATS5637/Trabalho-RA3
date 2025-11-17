@@ -257,13 +257,20 @@ static void listar_pids_disponiveis() {
 
         if (somente_numeros) {
             char caminho[256];
-            snprintf(caminho, sizeof(caminho), "/proc/%s/comm", nome);
+            int n = snprintf(caminho, sizeof(caminho), "/proc/%.200s/comm", nome);
+            if (n < 0 || n >= (int)sizeof(caminho)) {
+                fprintf(stderr, "Erro ao montar caminho para PID %s\n", nome);
+                continue;
+            }
 
             FILE *f = fopen(caminho, "r");
             char comm[256] = "(nome indisponível)";
 
             if (f) {
-                fgets(comm, sizeof(comm), f);
+                if (fgets(comm, sizeof(comm), f) == NULL) {
+                    fclose(f);
+                    continue;
+                }
                 fclose(f);
                 comm[strcspn(comm, "\n")] = '\0';
             }
@@ -275,6 +282,7 @@ static void listar_pids_disponiveis() {
     closedir(d);
     printf("====================================\n\n");
 }
+
 
 static int menu_interativo(const char *progname) {
     while (1) {

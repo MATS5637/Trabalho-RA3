@@ -1,5 +1,8 @@
 // tests/test_cpu.c
+
 // Programa de teste para o módulo de monitoramento de CPU (cpu_monitor.c)
+#define _POSIX_C_SOURCE 200809L
+
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
