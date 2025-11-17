@@ -168,11 +168,6 @@ if (stat(fullpath, &st) == 0 && S_ISDIR(st.st_mode)) {
     printf("  %s\n", ent->d_name);
     count++;
 }
-
-        {
-            printf("  %s\n", ent->d_name);
-            count++;
-        }
     }
 
     closedir(dir);
